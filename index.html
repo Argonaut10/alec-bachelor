@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Operation Los Gatos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=Share+Tech+Mono&display=swap">
+<style>
+/* Layout: tactical lobby. Squad lineup across the top, status rail, then ready-check / intel / comms panels. Single committed dark look. */
+:root{
+  color-scheme: dark;
+  --bg:#0a0e12;
+  --bg-2:#111820;
+  --panel:#121a22;
+  --panel-hi:#18222c;
+  --line:#26323d;
+  --line-hi:#3a4a58;
+  --fg:#e9eef2;
+  --muted:#8796a4;
+  --dim:#5a6875;
+  --accent:#f2b23a;
+  --accent-ink:#1a1206;
+  --ready:#63d36b;
+  --ready-dim:#1f3b23;
+  --warn:#e8594d;
+  --f-display:"Teko","Barlow Condensed","Arial Narrow",Impact,sans-serif;
+  --f-body:"Barlow","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --f-mono:"Share Tech Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{
+  font-family:var(--f-body);font-size:15px;line-height:1.5;
+  min-height:100%;
+  background:
+    radial-gradient(1200px 520px at 50% -120px, rgba(242,178,58,.10), transparent 70%),
+    radial-gradient(900px 600px at 100% 30%, rgba(60,110,150,.10), transparent 70%),
+    linear-gradient(180deg,var(--bg-2) 0%, var(--bg) 60%);
+  background-color:var(--bg);
+  overflow-x:hidden;
+}
+body::before{ /* faint tactical grid */
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:48px 48px;
+  mask-image:linear-gradient(180deg,#000 0%,transparent 75%);
+}
+.wrap{position:relative;z-index:1;max-width:1320px;margin:0 auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:18px 40px;display:flex;flex-direction:column;gap:18px}
+
+/* ---------- header ---------- */
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px 24px;border-bottom:1px solid var(--line);padding-bottom:14px}
+.mode{font-family:var(--f-mono);font-size:12px;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;display:flex;gap:10px;align-items:center}
+.mode .dot{width:8px;height:8px;background:var(--accent);display:inline-block;transform:rotate(45deg)}
+h1{font-family:var(--f-display);font-weight:600;font-size:clamp(40px,6vw,68px);line-height:.85;letter-spacing:.02em;margin:6px 0 0;text-transform:uppercase;text-wrap:balance}
+h1 small{display:block;font-size:.42em;letter-spacing:.12em;color:var(--muted);font-weight:500;margin-top:8px}
+.clock{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.clock-label{font-family:var(--f-mono);font-size:12px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+.clock-units{display:flex;gap:6px}
+.cu{background:rgba(0,0,0,.35);border:1px solid var(--line);min-width:64px;padding:4px 8px 2px;text-align:center}
+.cu b{display:block;font-family:var(--f-display);font-weight:500;font-size:40px;line-height:1;font-variant-numeric:tabular-nums;color:var(--fg)}
+.cu span{font-family:var(--f-mono);font-size:10px;letter-spacing:.2em;color:var(--dim)}
+.clock-sub{font-family:var(--f-mono);font-size:11px;color:var(--dim);letter-spacing:.08em}
+
+/* ---------- lineup ---------- */
+.lineup{position:relative;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:10px;padding:18px 0 6px;isolation:isolate}
+.ridge{position:absolute;left:0;right:0;bottom:30px;height:110px;z-index:-1;opacity:.55;pointer-events:none}
+.slot{position:relative;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card{position:relative;aspect-ratio:3/4.3;max-width:100%;border:1px solid var(--line);background:
+   linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.35)),var(--panel);
+   overflow:hidden;clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));
+   transition:border-color .3s, box-shadow .3s}
+.card::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 3px);pointer-events:none}
+.slot.ready .card{border-color:rgba(99,211,107,.55);box-shadow:inset 0 -60px 60px -40px rgba(99,211,107,.25)}
+.slot.me .card{outline:1px solid var(--accent);outline-offset:3px}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--dim)}
+.empty .ring{width:44%;aspect-ratio:1;border:1px dashed var(--line-hi);border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-size:26px;color:var(--line-hi)}
+.empty .txt{font-family:var(--f-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase}
+.avatar{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;opacity:0;transform:translateY(14px) scale(.96);transition:opacity .6s ease, transform .6s cubic-bezier(.2,.8,.2,1)}
+.slot.ready .avatar{opacity:1;transform:none}
+.slot.ready .empty{opacity:0}
+.avatar svg{width:96%;height:auto;filter:blur(4px) saturate(1.1);display:block}
+.tag{position:absolute;top:8px;left:8px;font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;padding:2px 6px;background:rgba(0,0,0,.55);color:var(--muted);border:1px solid var(--line);text-transform:uppercase}
+.slot.ready .tag{color:var(--ready);border-color:rgba(99,211,107,.45)}
+.nameplate{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--line-hi);padding:2px 0 2px 8px;min-width:0}
+.slot.ready .nameplate{border-left-color:var(--ready)}
+.nameplate b{font-family:var(--f-display);font-weight:500;font-size:22px;line-height:1;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nameplate span{font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot.ready .nameplate span{color:var(--ready)}
+.slot.groom .card{border-color:rgba(242,178,58,.6);box-shadow:0 0 0 1px rgba(242,178,58,.15),0 0 40px -6px rgba(242,178,58,.35)}
+.slot.groom .avatar{opacity:1;transform:none}
+.slot.groom .empty{opacity:0}
+.slot.groom .tag{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+.slot.groom .nameplate{border-left-color:var(--accent)}
+.slot.groom .nameplate span{color:var(--accent)}
+
+/* emote bubble + animations */
+.bubble{position:absolute;left:50%;top:18%;transform:translate(-50%,8px) scale(.8);opacity:0;pointer-events:none;z-index:3;
+  background:var(--accent);color:var(--accent-ink);font-family:var(--f-display);font-weight:600;font-size:20px;letter-spacing:.06em;line-height:1;padding:6px 10px 3px;white-space:nowrap;
+  clip-path:polygon(0 0,100% 0,100% 80%,58% 80%,50% 100%,42% 80%,0 80%);padding-bottom:10px}
+.bubble.show{animation:bub 2.6s ease forwards}
+@keyframes bub{0%{opacity:0;transform:translate(-50%,8px) scale(.8)}12%{opacity:1;transform:translate(-50%,0) scale(1.05)}20%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-10px) scale(1)}}
+.avatar.e-salute svg{animation:salute 1.6s ease}
+.avatar.e-cheers svg{animation:hop .5s ease 3}
+.avatar.e-flex svg{animation:flex .8s ease 2}
+.avatar.e-fishon svg{animation:reel .35s ease-in-out 6}
+.avatar.e-letsgo svg{animation:jump .7s cubic-bezier(.3,1.6,.5,1) 2}
+.avatar.e-gg svg{animation:sway 1.4s ease}
+@keyframes salute{0%,100%{transform:none}30%,70%{transform:rotate(-6deg) translateY(-4px)}}
+@keyframes hop{0%,100%{transform:none}50%{transform:translateY(-10%)}}
+@keyframes flex{0%,100%{transform:none}50%{transform:scale(1.12,1.04)}}
+@keyframes reel{0%,100%{transform:rotate(0)}50%{transform:rotate(5deg) translateX(3px)}}
+@keyframes jump{0%,100%{transform:none}40%{transform:translateY(-18%) scale(1.04)}}
+@keyframes sway{0%,100%{transform:none}25%{transform:rotate(-7deg)}75%{transform:rotate(7deg)}}
+
+/* ---------- status rail ---------- */
+.rail{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px;background:rgba(0,0,0,.35);border:1px solid var(--line);padding:10px 14px}
+.squad{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.squad .count{font-family:var(--f-display);font-size:34px;line-height:.9;font-weight:500;font-variant-numeric:tabular-nums}
+.squad .count em{font-style:normal;color:var(--ready)}
+.squad .lbl{font-family:var(--f-mono);font-size:11px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+.pips{display:flex;gap:4px}
+.pip{width:22px;height:6px;background:var(--line);transform:skewX(-20deg);transition:background .4s}
+.pip.on{background:var(--ready)}
+.emotes{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.emotes .lbl{font-family:var(--f-mono);font-size:11px;letter-spacing:.18em;color:var(--muted);margin-right:4px;text-transform:uppercase}
+.emo{font-family:var(--f-display);font-size:18px;letter-spacing:.06em;line-height:1;padding:7px 12px 4px;background:var(--panel-hi);border:1px solid var(--line-hi);color:var(--fg);cursor:pointer;text-transform:uppercase;transition:background .15s,border-color .15s,transform .1s}
+.emo:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.emo:active:not(:disabled){transform:translateY(1px)}
+.emo:disabled{opacity:.35;cursor:not-allowed}
+.emo kbd{font-family:var(--f-mono);font-size:10px;color:var(--dim);margin-left:6px}
+
+/* ---------- panels ---------- */
+.grid{display:grid;grid-template-columns:340px minmax(0,1fr) 360px;gap:14px;align-items:start}
+.panel{background:linear-gradient(180deg,var(--panel-hi),var(--panel));border:1px solid var(--line);min-width:0;display:flex;flex-direction:column}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);background:rgba(0,0,0,.25)}
+.ph h2{margin:0;font-family:var(--f-display);font-weight:500;font-size:24px;line-height:1;letter-spacing:.06em;text-transform:uppercase;padding-top:3px}
+.ph .meta{font-family:var(--f-mono);font-size:11px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
+.pb{padding:14px;display:flex;flex-direction:column;gap:14px;min-width:0}
+
+/* ready check form */
+.field{display:flex;flex-direction:column;gap:6px}
+.flabel{font-family:var(--f-mono);font-size:11px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+select,input[type=text]{font:inherit;color:var(--fg);background:#0c1217;border:1px solid var(--line-hi);padding:9px 10px;border-radius:0;width:100%;min-width:0}
+select:focus-visible,input:focus-visible,button:focus-visible,.check:focus-within,.seg label:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.check{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--line);background:#0e151b;cursor:pointer}
+.check input{position:absolute;opacity:0;pointer-events:none}
+.box{flex:none;width:20px;height:20px;border:1px solid var(--line-hi);display:grid;place-items:center;margin-top:1px;background:#0a0f13}
+.check input:checked + .box{background:var(--ready);border-color:var(--ready)}
+.check input:checked + .box::after{content:"";width:10px;height:5px;border-left:2px solid #0a1a0c;border-bottom:2px solid #0a1a0c;transform:rotate(-45deg) translate(1px,-1px)}
+.check .ct b{display:block;font-weight:600}
+.check .ct span{font-size:13px;color:var(--muted)}
+.check.dis{opacity:.4;cursor:not-allowed}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg label{display:block;cursor:pointer}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:block;text-align:center;padding:9px 6px 6px;border:1px solid var(--line-hi);font-family:var(--f-display);font-size:19px;letter-spacing:.06em;text-transform:uppercase;line-height:1;background:#0c1217}
+.seg input:checked + span{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.flight[hidden]{display:none!important}
+.flight{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--line-hi);padding-left:10px}
+.two{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px}
+
+.readybtn{position:relative;width:100%;border:0;cursor:pointer;font-family:var(--f-display);font-weight:600;font-size:34px;letter-spacing:.08em;line-height:1;padding:16px 12px 10px;text-transform:uppercase;color:var(--accent-ink);background:var(--accent);
+  clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px));transition:filter .15s, transform .1s}
+.readybtn:hover:not(:disabled){filter:brightness(1.08)}
+.readybtn:active:not(:disabled){transform:translateY(1px)}
+.readybtn:disabled{background:#2b343c;color:#66727d;cursor:not-allowed}
+.readybtn.is-ready{background:var(--ready);color:#07160a}
+.readybtn.is-ready:hover{filter:none;background:#7adf81}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.hint.warn{color:var(--warn)}
+.notice{font-size:13px;line-height:1.45;border:1px solid var(--line);background:#0d141a;padding:10px 12px;color:var(--muted)}
+.notice b{color:var(--fg)}
+
+/* intel tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);background:rgba(0,0,0,.25);overflow-x:auto}
+.tab{flex:none;font-family:var(--f-display);font-size:22px;letter-spacing:.06em;text-transform:uppercase;line-height:1;padding:12px 16px 8px;background:transparent;border:0;border-bottom:3px solid transparent;color:var(--muted);cursor:pointer}
+.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.tab:hover{color:var(--fg)}
+.tabpane{padding:16px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.fact{border:1px solid var(--line);background:#0d141a;padding:10px 12px;min-width:0}
+.fact span{display:block;font-family:var(--f-mono);font-size:10px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+.fact b{display:block;font-family:var(--f-display);font-weight:500;font-size:26px;line-height:1.05;letter-spacing:.03em;text-transform:uppercase;margin-top:4px}
+.fact small{display:block;color:var(--muted);font-size:13px}
+.h3{font-family:var(--f-mono);font-size:11px;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;margin:0}
+.phases{display:flex;flex-direction:column;gap:0;border:1px solid var(--line)}
+.phase{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;padding:12px;border-top:1px solid var(--line)}
+.phase:first-child{border-top:0}
+.phase .when{font-family:var(--f-display);font-size:22px;line-height:1;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.phase .when small{display:block;font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;color:var(--dim);margin-top:4px}
+.phase h4{margin:0 0 2px;font-size:16px;font-weight:600}
+.phase p{margin:0;color:var(--muted);font-size:14px}
+.phase.wed .when{color:var(--accent)}
+.tba{font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;color:var(--accent);border:1px solid rgba(242,178,58,.4);padding:1px 5px;margin-left:6px;vertical-align:2px}
+.airports{display:flex;flex-direction:column;gap:8px}
+.ap{display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid var(--line);background:#0d141a;padding:10px 12px}
+.ap.best{border-color:rgba(242,178,58,.55)}
+.ap .code{font-family:var(--f-display);font-size:38px;line-height:.9;font-weight:500;letter-spacing:.03em}
+.ap.best .code{color:var(--accent)}
+.ap h4{margin:0;font-size:15px;font-weight:600}
+.ap p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.ap .drive{text-align:right;font-family:var(--f-mono);font-size:12px;color:var(--fg);white-space:nowrap}
+.ap .drive small{display:block;color:var(--dim);font-size:10px;letter-spacing:.12em}
+.rec{font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;background:var(--accent);color:var(--accent-ink);padding:1px 5px;margin-left:6px;vertical-align:2px}
+.manifest{width:100%;border-collapse:collapse;font-size:14px}
+.manifest th{font-family:var(--f-mono);font-size:10px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase;text-align:left;font-weight:400;padding:6px 8px;border-bottom:1px solid var(--line)}
+.manifest td{padding:8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.manifest td.n{font-weight:600}
+.tw{overflow-x:auto}
+.st{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em}
+.st.ok{color:var(--ready)} .st.no{color:var(--dim)}
+.loadout{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.lo{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--line);background:#0d141a;cursor:pointer}
+.lo input{position:absolute;opacity:0;pointer-events:none}
+.lo:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.lo input:checked + .box{background:var(--accent);border-color:var(--accent)}
+.lo input:checked + .box::after{content:"";width:10px;height:5px;border-left:2px solid var(--accent-ink);border-bottom:2px solid var(--accent-ink);transform:rotate(-45deg) translate(1px,-1px)}
+.lo .ct b{display:block;font-weight:600;font-size:14px}
+.lo .ct span{display:block;font-size:13px;color:var(--muted)}
+.lo .slot-k{font-family:var(--f-mono);font-size:9px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
+.lo input:checked ~ .ct b{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--dim)}
+
+/* comms */
+.chat{display:flex;flex-direction:column;height:560px;max-height:75vh}
+.feed{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-height:0;font-size:14px}
+.msg{line-height:1.4;overflow-wrap:anywhere}
+.msg time{font-family:var(--f-mono);font-size:11px;color:var(--dim);margin-right:6px}
+.msg .who{font-weight:700;margin-right:6px;text-transform:uppercase;letter-spacing:.03em}
+.msg.sys{font-family:var(--f-mono);font-size:12px;color:var(--ready);letter-spacing:.04em}
+.msg.sys.em{color:var(--accent)}
+.feed .empty-feed{margin:auto;text-align:center;color:var(--dim);font-family:var(--f-mono);font-size:12px;letter-spacing:.1em;padding:20px}
+.composer{display:flex;gap:6px;padding:10px;border-top:1px solid var(--line);background:rgba(0,0,0,.25)}
+.composer input{flex:1}
+.send{font-family:var(--f-display);font-size:20px;letter-spacing:.08em;line-height:1;padding:8px 14px 5px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;text-transform:uppercase}
+.send:hover:not(:disabled){background:var(--accent);color:var(--accent-ink)}
+.send:disabled{opacity:.35;cursor:not-allowed}
+.live{display:inline-flex;align-items:center;gap:6px}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.live.on i{background:var(--ready);box-shadow:0 0 8px var(--ready)}
+
+.foot{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;color:var(--dim);text-align:center;text-transform:uppercase}
+
+/* responsive */
+@media (max-width:1180px){
+  .grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .intel{grid-column:1 / -1;order:3}
+}
+@media (max-width:900px){
+  .lineup{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .ridge{display:none}
+}
+@media (max-width:720px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .intel{order:0}
+  .lineup{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .clock{align-items:flex-start}
+  .cu{min-width:0;flex:1}
+  .clock-units{width:100%}
+  .chat{height:460px}
+  .ap{grid-template-columns:60px minmax(0,1fr)}
+  .ap .drive{grid-column:2;text-align:left}
+  .phase{grid-template-columns:76px minmax(0,1fr)}
+  .nameplate b{font-size:19px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+</style>
+<style>html,body{margin:0;height:auto}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="mode"><span class="dot"></span>Private match · Bachelor party · Squad of 8</div>
+      <h1>Operation Los Gatos<small>Squad up for the groom</small></h1>
+    </div>
+    <div class="clock" aria-live="off">
+      <div class="clock-label" id="clockLabel">Deployment in</div>
+      <div class="clock-units">
+        <div class="cu"><b id="cd-d">--</b><span>DAYS</span></div>
+        <div class="cu"><b id="cd-h">--</b><span>HRS</span></div>
+        <div class="cu"><b id="cd-m">--</b><span>MIN</span></div>
+        <div class="cu"><b id="cd-s">--</b><span>SEC</span></div>
+      </div>
+      <div class="clock-sub">JUN 23 2027 · LOS GATOS MOUNTAINS, CA</div>
+    </div>
+  </header>
+
+  <section class="lineup" id="lineup" aria-label="Squad lineup">
+    <svg class="ridge" viewBox="0 0 1200 110" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 110 L0 70 L80 52 L150 64 L240 30 L310 50 L390 20 L470 46 L560 12 L640 40 L720 24 L800 50 L880 18 L960 44 L1040 30 L1120 56 L1200 40 L1200 110 Z" fill="#16202a"/>
+      <path d="M0 110 L0 86 L100 74 L190 88 L280 66 L380 82 L470 62 L570 80 L660 60 L760 84 L860 66 L950 80 L1050 64 L1140 82 L1200 74 L1200 110 Z" fill="#0f171f"/>
+    </svg>
+  </section>
+
+  <div class="rail">
+    <div class="squad">
+      <div class="count"><em id="readyN">0</em>/8</div>
+      <div>
+        <div class="lbl">Squad ready</div>
+        <div class="pips" id="pips"></div>
+      </div>
+    </div>
+    <div class="emotes" id="emotes" role="group" aria-label="Emotes">
+      <span class="lbl">Emotes</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- READY CHECK -->
+    <section class="panel" aria-labelledby="rcTitle">
+      <div class="ph"><h2 id="rcTitle">Ready check</h2><span class="meta" id="meMeta">No callsign</span></div>
+      <form class="pb" id="rc" autocomplete="off">
+        <div class="field">
+          <label class="flabel" for="callsign">Callsign</label>
+          <select id="callsign" name="callsign">
+            <option value="">Pick your name</option>
+          </select>
+        </div>
+
+        <label class="check" id="attWrap">
+          <input type="checkbox" id="attending" name="attending">
+          <span class="box"></span>
+          <span class="ct"><b>I'm in for June 23–25</b><span>All three days, back in time for the wedding on the 26th.</span></span>
+        </label>
+
+        <div class="field">
+          <span class="flabel" id="travelLbl">How are you getting there</span>
+          <div class="seg" role="radiogroup" aria-labelledby="travelLbl">
+            <label><input type="radio" name="travel" id="travelFly" value="flying"><span>Flying in</span></label>
+            <label><input type="radio" name="travel" id="travelDrive" value="driving"><span>Driving / local</span></label>
+          </div>
+        </div>
+
+        <div class="flight" id="flightBox" hidden>
+          <label class="check">
+            <input type="checkbox" id="booked" name="booked">
+            <span class="box"></span>
+            <span class="ct"><b>Plane ticket booked</b><span>Required before you can ready up.</span></span>
+          </label>
+          <div class="two">
+            <div class="field">
+              <label class="flabel" for="airport">Airport</label>
+              <select id="airport" name="airport">
+                <option value="SJC">SJC</option>
+                <option value="SFO">SFO</option>
+                <option value="OAK">OAK</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="flabel" for="arrival">Landing</label>
+              <input type="text" id="arrival" name="arrival" maxlength="40" placeholder="Jun 22 · 8:40pm">
+            </div>
+          </div>
+        </div>
+
+        <button type="button" class="readybtn" id="readyBtn" disabled>Ready up</button>
+        <p class="hint" id="readyHint">Pick your callsign to start.</p>
+        <div class="notice" id="syncNote" hidden></div>
+      </form>
+    </section>
+
+    <!-- INTEL -->
+    <section class="panel intel" aria-label="Mission intel">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="t-brief" aria-controls="p-brief" aria-selected="true">Briefing</button>
+        <button class="tab" role="tab" id="t-travel" aria-controls="p-travel" aria-selected="false">Travel</button>
+        <button class="tab" role="tab" id="t-loadout" aria-controls="p-loadout" aria-selected="false">Loadout</button>
+      </div>
+
+      <div class="tabpane" id="p-brief" role="tabpanel" aria-labelledby="t-brief">
+        <div class="facts">
+          <div class="fact"><span>Target</span><b>Alec</b><small>The groom</small></div>
+          <div class="fact"><span>Window</span><b>Jun 23–25</b><small>2027 · 3 days</small></div>
+          <div class="fact"><span>Area of ops</span><b>Los Gatos Mtns</b><small>Exact address coming</small></div>
+          <div class="fact"><span>Wedding</span><b>Jun 26</b><small>The day after exfil</small></div>
+        </div>
+        <h3 class="h3">Mission phases</h3>
+        <div class="phases">
+          <div class="phase">
+            <div class="when">Day 1<small>WED JUN 23</small></div>
+            <div><h4>Chartered fishing trip<span class="tba">TIME TBA</span></h4><p>Organized charter out on the water. Back to the property that night to cook what we caught.</p></div>
+          </div>
+          <div class="phase">
+            <div class="when">Day 2<small>THU JUN 24</small></div>
+            <div><h4>Hold the property</h4><p>Most of the trip is at the house. It has plenty to do on site, so no need to go anywhere.</p></div>
+          </div>
+          <div class="phase">
+            <div class="when">Day 3<small>FRI JUN 25</small></div>
+            <div><h4>Exfil</h4><p>Clean up, pack out, get everyone home in one piece.</p></div>
+          </div>
+          <div class="phase wed">
+            <div class="when">Jun 26<small>SAT</small></div>
+            <div><h4>The wedding</h4><p>Show up rested. That's the whole mission.</p></div>
+          </div>
+        </div>
+        <p class="hint">Cost per person and the full schedule will drop here once they're locked in. Ready up now so Jason can get a final headcount.</p>
+      </div>
+
+      <div class="tabpane" id="p-travel" role="tabpanel" aria-labelledby="t-travel" hidden>
+        <h3 class="h3">Where to land</h3>
+        <div class="airports">
+          <div class="ap best">
+            <div class="code">SJC</div>
+            <div><h4>San José Mineta<span class="rec">BEST PICK</span></h4><p>Closest by far and easy to get in and out of. Fly here if the price is close.</p></div>
+            <div class="drive">≈ 25 MIN<small>TO LOS GATOS</small></div>
+          </div>
+          <div class="ap">
+            <div class="code">SFO</div>
+            <div><h4>San Francisco International</h4><p>Most nonstop flights and often cheapest from far away. Expect Bay Area traffic.</p></div>
+            <div class="drive">≈ 50–70 MIN<small>TO LOS GATOS</small></div>
+          </div>
+          <div class="ap">
+            <div class="code">OAK</div>
+            <div><h4>Oakland International</h4><p>Good backup, especially for Southwest fares.</p></div>
+            <div class="drive">≈ 50–70 MIN<small>TO LOS GATOS</small></div>
+          </div>
+        </div>
+        <h3 class="h3">Timing</h3>
+        <p class="hint">Fishing charters usually head out early in the morning. If you're flying, plan to land the night of <b>June 22</b> so you don't miss the boat. Flying out on the 25th is fine, or stay through the wedding on the 26th.</p>
+        <p class="hint">The property is up in the mountains, where rideshare pickups can be slow. Put your landing time in the ready check so we can set up carpools from the airport.</p>
+        <h3 class="h3">Arrival manifest</h3>
+        <div class="tw">
+          <table class="manifest">
+            <thead><tr><th>Callsign</th><th>Travel</th><th>Airport</th><th>Landing</th></tr></thead>
+            <tbody id="manifest"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tabpane" id="p-loadout" role="tabpanel" aria-labelledby="t-loadout" hidden>
+        <p class="hint">Your packing list. Check items off as you pack; only you see your checkmarks.</p>
+        <div class="loadout" id="loadout"></div>
+      </div>
+    </section>
+
+    <!-- COMMS -->
+    <section class="panel" aria-labelledby="commsTitle">
+      <div class="ph"><h2 id="commsTitle">Squad comms</h2><span class="meta live" id="live"><i></i><span id="liveTxt">Connecting</span></span></div>
+      <div class="chat">
+        <div class="feed" id="feed" aria-live="polite"><div class="empty-feed">No transmissions yet.<br>Say something to the squad.</div></div>
+        <form class="composer" id="composer">
+          <label for="msg" style="position:absolute;left:-9999px">Message</label>
+          <input type="text" id="msg" maxlength="280" placeholder="Pick a callsign to chat" disabled>
+          <button class="send" id="sendBtn" type="submit" disabled>Send</button>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <div class="foot">Wedding · Jun 26 2027 · Hosted by Jason</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+</body>
+</html>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</body>
+</html>
+<script>
+/* ===== PASTE FIREBASE CONFIG HERE ===== */
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAiLJsyL2JgkHvUiEVvn7R6a9eEwSIpBe8",
+  authDomain: "alec-bachelor.firebaseapp.com",
+  projectId: "alec-bachelor",
+  storageBucket: "alec-bachelor.firebasestorage.app",
+  messagingSenderId: "552914463902",
+  appId: "1:552914463902:web:66a48ee3c8b83c04d21f8f"
+};
+/* ====================================== */
+</script>
+</body>
+</html>
+<script>
+(function(){
+  "use strict";
+  var ROSTER = [
+    {id:"mana",name:"Mana"},
+    {id:"lucas",name:"Lucas",full:"Lucas Weber"},
+    {id:"sheldon",name:"Sheldon"},
+    {id:"tyler",name:"Tyler",full:"Tyler Crandall"},
+    {id:"ole",name:"Ole"},
+    {id:"brandon",name:"Brandon"},
+    {id:"joejr",name:"Joe Jr.",full:"Joe Jr."},
+    {id:"jason",name:"Jason",full:"Jason (host)"}
+  ];
+  var BYID = {}; ROSTER.forEach(function(p,i){ p.hue = [210,18,160,280,40,195,330,95][i]; BYID[p.id]=p; });
+  var EMOTES = [
+    {id:"salute",label:"Salute",key:"1"},
+    {id:"cheers",label:"Cheers",key:"2"},
+    {id:"letsgo",label:"Let's go",key:"3"},
+    {id:"fishon",label:"Fish on",key:"4"},
+    {id:"flex",label:"Flex",key:"5"},
+    {id:"gg",label:"GG",key:"6"}
+  ];
+  var EM_BY = {}; EMOTES.forEach(function(e){EM_BY[e.id]=e;});
+  var LOADOUT = [
+    {k:"Primary",t:"Photo ID",d:"For the flight and the charter check-in."},
+    {k:"Primary",t:"Wedding outfit",d:"The wedding is the day after. Pack it now so it's not an afterthought."},
+    {k:"Charter",t:"Warm layers + windbreaker",d:"Mornings on the water out here are cold and foggy in June, even when it's hot inland."},
+    {k:"Charter",t:"Non-slip closed-toe shoes",d:"Decks get wet. No sandals."},
+    {k:"Charter",t:"Seasickness meds",d:"Take them before you board, not after you feel it."},
+    {k:"Charter",t:"Sunscreen, hat, sunglasses",d:"Polarized lenses help you see the water."},
+    {k:"Charter",t:"Cash for the deckhand tip",d:"Tipping the crew is standard on charters."},
+    {k:"Charter",t:"Fishing license",d:"California requires one. Details once the charter is booked; many boats sell a one-day license."},
+    {k:"Property",t:"Swim trunks",d:"Just in case."},
+    {k:"Property",t:"Hoodie or jacket",d:"Mountain nights cool off fast."},
+    {k:"Property",t:"Your best drinking game",d:"Cards, dice, whatever. Bring something to teach the group."},
+    {k:"Utility",t:"Phone charger + power bank",d:"Signal in the hills can be spotty and drains batteries."}
+  ];
+  var TARGET = Date.parse("2027-06-23T00:00:00-07:00");
+  var LS = {
+    get:function(k,d){ try{ var v=localStorage.getItem("alecbp."+k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+    set:function(k,v){ try{ localStorage.setItem("alecbp."+k,JSON.stringify(v)); }catch(e){} }
+  };
+
+  var S = {
+    me: LS.get("callsign",""),
+    players: {},       // id -> doc body
+    chat: [],          // newest last
+    db: null, canWrite: true, live: false, triedLive: false,
+    seenEmote: {}, firstSnap: true, lastEmoteSent: 0
+  };
+
+  var $ = function(id){return document.getElementById(id);};
+
+  /* ---------- avatar svg ---------- */
+  function avatarSVG(hue, groom){
+    var c1 = groom ? "hsl(40 85% 62%)" : "hsl("+hue+" 55% 58%)";
+    var c2 = groom ? "hsl(30 70% 34%)" : "hsl("+hue+" 45% 26%)";
+    var gid = "g"+Math.random().toString(36).slice(2,8);
+    return '<svg viewBox="0 0 120 150" aria-hidden="true"><defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+c1+'"/><stop offset="1" stop-color="'+c2+'"/></linearGradient></defs>'+
+      '<path d="M6 150 C8 110 28 96 60 94 C92 96 112 110 114 150 Z" fill="url(#'+gid+')"/>'+
+      '<path d="M48 78 L72 78 L74 98 L46 98 Z" fill="'+c2+'"/>'+
+      '<ellipse cx="60" cy="58" rx="22" ry="26" fill="url(#'+gid+')"/>'+
+      '<path d="M34 56 C33 30 87 30 86 56 L90 60 L30 60 Z" fill="'+c2+'"/>'+
+      '<rect x="40" y="56" width="40" height="7" rx="3" fill="rgba(0,0,0,.45)"/>'+
+      '<path d="M22 124 L46 112 L48 150 L26 150 Z" fill="rgba(0,0,0,.25)"/><path d="M98 124 L74 112 L72 150 L94 150 Z" fill="rgba(0,0,0,.25)"/>'+
+      '</svg>';
+  }
+
+  /* ---------- build lineup ---------- */
+  var slotEls = {};
+  function buildLineup(){
+    var order = ROSTER.slice(0,4).map(function(p){return p.id;}).concat(["__groom"], ROSTER.slice(4).map(function(p){return p.id;}));
+    var lineup = $("lineup");
+    order.forEach(function(id){
+      var groom = id==="__groom";
+      var p = groom ? {id:"alec",name:"Alec",hue:40} : BYID[id];
+      var slot = document.createElement("div");
+      slot.className = "slot"+(groom?" groom":"");
+      slot.innerHTML =
+        '<div class="card">'+
+          '<span class="tag">'+(groom?"GROOM":"NOT READY")+'</span>'+
+          '<div class="empty"><div class="ring">'+p.name.charAt(0)+'</div><div class="txt">Awaiting</div></div>'+
+          '<div class="avatar">'+avatarSVG(p.hue,groom)+'</div>'+
+          '<div class="bubble"></div>'+
+        '</div>'+
+        '<div class="nameplate"><b></b><span></span></div>';
+      slot.querySelector(".nameplate b").textContent = p.name;
+      slot.querySelector(".nameplate span").textContent = groom ? "The target" : "Not ready";
+      lineup.appendChild(slot);
+      slotEls[groom?"alec":id] = slot;
+    });
+    var pips = $("pips");
+    for (var i=0;i<8;i++){ var d=document.createElement("i"); d.className="pip"; pips.appendChild(d); }
+  }
+
+  function buildSelect(){
+    var sel = $("callsign");
+    ROSTER.forEach(function(p){ var o=document.createElement("option"); o.value=p.id; o.textContent=p.full||p.name; sel.appendChild(o); });
+    sel.value = BYID[S.me] ? S.me : "";
+    if(!BYID[S.me]) S.me = "";
+  }
+
+  function buildEmotes(){
+    var box = $("emotes");
+    EMOTES.forEach(function(e){
+      var b=document.createElement("button"); b.type="button"; b.className="emo"; b.dataset.emote=e.id;
+      b.innerHTML = '<span></span><kbd>'+e.key+'</kbd>'; b.firstChild.textContent=e.label;
+      b.addEventListener("click", function(){ sendEmote(e.id); });
+      box.appendChild(b);
+    });
+  }
+
+  function buildLoadout(){
+    var checked = LS.get("loadout",{});
+    var box = $("loadout");
+    LOADOUT.forEach(function(it,i){
+      var id="lo"+i;
+      var l=document.createElement("label"); l.className="lo"; l.htmlFor=id;
+      l.innerHTML='<input type="checkbox" id="'+id+'"><span class="box"></span><span class="ct"><span class="slot-k"></span><b></b><span></span></span>';
+      l.querySelector(".slot-k").textContent=it.k;
+      l.querySelector("b").textContent=it.t;
+      l.querySelector(".ct > span:last-child").textContent=it.d;
+      var cb=l.querySelector("input"); cb.checked=!!checked[i];
+      cb.addEventListener("change",function(){ var c=LS.get("loadout",{}); c[i]=cb.checked; LS.set("loadout",c); });
+      box.appendChild(l);
+    });
+  }
+
+  /* ---------- tabs ---------- */
+  function setupTabs(){
+    var tabs=[].slice.call(document.querySelectorAll(".tab"));
+    function show(t){
+      tabs.forEach(function(x){ var on=x===t; x.setAttribute("aria-selected",on?"true":"false"); $(x.getAttribute("aria-controls")).hidden=!on; });
+      LS.set("tab",t.id);
+    }
+    tabs.forEach(function(t){ t.addEventListener("click",function(){show(t);}); });
+    var saved=LS.get("tab",""); var st=saved&&$(saved); if(st&&st.classList.contains("tab")) show(st);
+  }
+
+  /* ---------- countdown ---------- */
+  function pad(n){return (n<10?"0":"")+n;}
+  function tick(){
+    var ms = TARGET - Date.now();
+    if (ms<=0){ $("clockLabel").textContent="Deployed"; ["d","h","m","s"].forEach(function(k){$("cd-"+k).textContent="00";}); return; }
+    var s=Math.floor(ms/1000);
+    $("cd-d").textContent = Math.floor(s/86400);
+    $("cd-h").textContent = pad(Math.floor(s%86400/3600));
+    $("cd-m").textContent = pad(Math.floor(s%3600/60));
+    $("cd-s").textContent = pad(s%60);
+  }
+
+  /* ---------- state helpers ---------- */
+  function mine(){ return S.players[S.me] || {}; }
+  function prereqsOK(p){ return !!(p.attending && (p.travel==="driving" || (p.travel==="flying" && p.booked))); }
+
+  function render(){
+    var readyN=0;
+    ROSTER.forEach(function(r){
+      var p=S.players[r.id]||{}; var el=slotEls[r.id];
+      var ready=!!(p.ready && prereqsOK(p));
+      if(ready) readyN++;
+      el.classList.toggle("ready",ready);
+      el.classList.toggle("me",r.id===S.me);
+      el.querySelector(".tag").textContent = ready ? "READY" : (r.id===S.me ? "YOU" : "NOT READY");
+      var sub = ready ? (p.travel==="flying" ? "Ready · flying "+(p.airport||"") : "Ready · driving") :
+                (p.attending ? (p.travel==="flying" && !p.booked ? "Needs ticket" : "Checking in") : "Not ready");
+      el.querySelector(".nameplate span").textContent = sub;
+    });
+    $("readyN").textContent=readyN;
+    [].forEach.call(document.querySelectorAll(".pip"),function(pp,i){pp.classList.toggle("on",i<readyN);});
+
+    // form
+    var me=mine(); var has=!!S.me; var ro=!S.canWrite;
+    $("meMeta").textContent = has ? (BYID[S.me].full||BYID[S.me].name) : "No callsign";
+    $("attending").checked=!!me.attending;
+    $("travelFly").checked=me.travel==="flying";
+    $("travelDrive").checked=me.travel==="driving";
+    $("booked").checked=!!me.booked;
+    if(document.activeElement!==$("airport")) $("airport").value=me.airport||"SJC";
+    if(document.activeElement!==$("arrival")) $("arrival").value=me.arrival||"";
+    $("flightBox").hidden = me.travel!=="flying";
+    ["attending","travelFly","travelDrive","booked","airport","arrival"].forEach(function(id){ $(id).disabled = !has || ro; });
+    $("attWrap").classList.toggle("dis",!has||ro);
+
+    var ok=prereqsOK(me); var isReady=!!(me.ready&&ok);
+    var btn=$("readyBtn");
+    btn.disabled = !has || ro || (!ok && !isReady);
+    btn.classList.toggle("is-ready",isReady);
+    btn.textContent = isReady ? "Ready ✓" : "Ready up";
+    var hint=$("readyHint"); hint.classList.remove("warn");
+    if(!has) hint.textContent="Pick your callsign to start.";
+    else if(ro) hint.textContent="You can view the lobby, but your account can't save changes here.";
+    else if(isReady) hint.textContent="You're locked in. Tap again to unready.";
+    else if(!me.attending) hint.textContent="Confirm you can make all three days.";
+    else if(!me.travel) hint.textContent="Tell the squad how you're getting there.";
+    else if(me.travel==="flying" && !me.booked) { hint.textContent="Book your plane ticket, then check the box to ready up."; hint.classList.add("warn"); }
+    else hint.textContent="All set. Hit Ready up.";
+
+    // emotes + chat inputs
+    [].forEach.call(document.querySelectorAll(".emo"),function(b){ b.disabled=!has||ro; });
+    $("msg").disabled = !has||ro; $("sendBtn").disabled=!has||ro;
+    $("msg").placeholder = has ? (ro?"Read-only":"Message the squad") : "Pick a callsign to chat";
+
+    renderManifest();
+  }
+
+  function renderManifest(){
+    var tb=$("manifest"); tb.textContent="";
+    ROSTER.forEach(function(r){
+      var p=S.players[r.id]||{};
+      var tr=document.createElement("tr");
+      var cells=[r.full||r.name,
+        p.travel==="flying" ? (p.booked?"Flying · booked":"Flying · not booked") : p.travel==="driving" ? "Driving" : "—",
+        p.travel==="flying" ? (p.airport||"SJC") : "—",
+        p.travel==="flying" ? (p.arrival||"—") : "—"];
+      cells.forEach(function(c,i){ var td=document.createElement("td"); td.textContent=c; if(i===0) td.className="n"; if(i===1){ td.className="st "+((p.travel==="driving"||p.booked)?"ok":"no"); } tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+  }
+
+  function fmtTime(ms){
+    var d=new Date(ms); var h=d.getHours(), m=d.getMinutes(); var ap=h>=12?"p":"a"; h=h%12||12;
+    var today=new Date(); var same=d.toDateString()===today.toDateString();
+    return (same?"":(d.getMonth()+1)+"/"+d.getDate()+" ")+h+":"+pad(m)+ap;
+  }
+  function renderChat(){
+    var feed=$("feed"); var atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
+    feed.textContent="";
+    if(!S.chat.length){ var e=document.createElement("div"); e.className="empty-feed"; e.innerHTML="No transmissions yet.<br>Say something to the squad."; feed.appendChild(e); return; }
+    S.chat.forEach(function(m){
+      var row=document.createElement("div"); var who=BYID[m.who];
+      row.className="msg"+(m.type==="sys"?" sys":"")+(m.type==="emote"?" sys em":"");
+      var t=document.createElement("time"); t.textContent=fmtTime(m.at||0); row.appendChild(t);
+      if(m.type==="sys"||m.type==="emote"){ row.appendChild(document.createTextNode("» "+String(m.text||""))); }
+      else{
+        var w=document.createElement("span"); w.className="who"; w.textContent=who?who.name:"Unknown";
+        w.style.color = who ? "hsl("+who.hue+" 70% 68%)" : "var(--muted)";
+        row.appendChild(w); row.appendChild(document.createTextNode(String(m.text||"")));
+      }
+      feed.appendChild(row);
+    });
+    if(atBottom||S.firstChat){ feed.scrollTop=feed.scrollHeight; S.firstChat=false; }
+  }
+
+  function setLive(on,txt){ S.live=on; $("live").classList.toggle("on",on); $("liveTxt").textContent=txt; }
+  function note(html){ var n=$("syncNote"); if(!html){n.hidden=true;return;} n.innerHTML=html; n.hidden=false; }
+
+  /* ---------- writes ---------- */
+  var saveTimer=null;
+  function savePlayer(patch, immediate){
+    if(!S.me) return;
+    var cur=mine(); var body={};
+    for(var k in cur) body[k]=cur[k];
+    for(var k2 in patch) body[k2]=patch[k2];
+    if(!prereqsOK(body)) body.ready=false;
+    body.name=BYID[S.me].name; body.updatedAt=Date.now();
+    S.players[S.me]=body; render();
+    if(!S.db || !S.canWrite) return Promise.resolve();
+    clearTimeout(saveTimer);
+    var run=function(){
+      return S.db.doc("players/"+S.me).set(S.players[S.me]).catch(function(e){
+        if(e && e.code==="permission-denied"){ note("<b>Couldn't save.</b> The lobby refused that change. Refresh the page and try again."); }
+        else if(e && e.code==="unavailable"){ setTimeout(run, 800+Math.random()*900); }
+      });
+    };
+    if(immediate) return run();
+    saveTimer=setTimeout(run,500);
+    return Promise.resolve();
+  }
+  function postChat(obj){
+    var m={who:S.me,at:Date.now(),type:obj.type||"msg",text:String(obj.text||"").slice(0,280)};
+    if(!S.db||!S.canWrite){ S.chat.push(m); renderChat(); return; }
+    S.db.collection("chat").add(m).catch(function(e){
+      if(e&&e.code==="permission-denied"){ note("<b>Message not sent.</b> Keep it under 280 characters and try again."); }
+    });
+  }
+
+  function playEmote(pid, emId){
+    var el=slotEls[pid]; var em=EM_BY[emId]; if(!el||!em) return;
+    var av=el.querySelector(".avatar"), bub=el.querySelector(".bubble");
+    av.className="avatar"; bub.classList.remove("show"); void av.offsetWidth;
+    av.classList.add("e-"+emId); bub.textContent=em.label; bub.classList.add("show");
+    clearTimeout(el._emT); el._emT=setTimeout(function(){ av.className="avatar"; bub.classList.remove("show"); },2700);
+  }
+  function sendEmote(emId){
+    if(!S.me||!S.canWrite) return;
+    var now=Date.now(); if(now-S.lastEmoteSent<1500) return; S.lastEmoteSent=now;
+    S.seenEmote[S.me]=now;
+    playEmote(S.me,emId);
+    savePlayer({emote:emId,emoteAt:now},true);
+  }
+
+  /* ---------- events ---------- */
+  function wire(){
+    $("callsign").addEventListener("change",function(e){
+      S.me=e.target.value; LS.set("callsign",S.me); render();
+    });
+    $("attending").addEventListener("change",function(e){ savePlayer({attending:e.target.checked}); });
+    $("travelFly").addEventListener("change",function(){ savePlayer({travel:"flying",airport:mine().airport||"SJC"}); });
+    $("travelDrive").addEventListener("change",function(){ savePlayer({travel:"driving"}); });
+    $("booked").addEventListener("change",function(e){ savePlayer({booked:e.target.checked}); });
+    $("airport").addEventListener("change",function(e){ savePlayer({airport:e.target.value}); });
+    $("arrival").addEventListener("input",function(e){ savePlayer({arrival:e.target.value.slice(0,40)}); });
+    $("rc").addEventListener("submit",function(e){e.preventDefault();});
+    $("readyBtn").addEventListener("click",function(){
+      var me=mine(); var was=!!(me.ready&&prereqsOK(me));
+      if(!was && !prereqsOK(me)) return;
+      savePlayer({ready:!was},true);
+      var n=BYID[S.me].name;
+      postChat({type:"sys",text: was ? n+" backed out of ready." : n+" readied up."});
+    });
+    $("composer").addEventListener("submit",function(e){
+      e.preventDefault(); var i=$("msg"); var t=i.value.trim(); if(!t||!S.me) return;
+      postChat({type:"msg",text:t}); i.value="";
+    });
+    document.addEventListener("keydown",function(e){
+      var tag=(e.target&&e.target.tagName)||""; if(/INPUT|SELECT|TEXTAREA/.test(tag)) return;
+      if(e.metaKey||e.ctrlKey||e.altKey) return;
+      var em=EMOTES.filter(function(x){return x.key===e.key;})[0]; if(em) sendEmote(em.id);
+    });
+  }
+
+  /* ---------- live sync ---------- */
+  function connect(){
+    var cfg=window.FIREBASE_CONFIG;
+    if(!cfg || !window.firebase){ setLive(false,"Offline"); note("<b>Not connected yet.</b> Ready-ups and chat only stay on this device until the lobby is linked to its database."); return; }
+    var db;
+    try{ firebase.initializeApp(cfg); db=firebase.firestore(); }
+    catch(e){ setLive(false,"Offline"); note("<b>Can't reach the lobby database.</b> Refresh the page to try again."); return; }
+    S.db=db; setLive(true,"Live");
+    var loadAt=Date.now();
+    db.collection("players").onSnapshot(function(snap){
+      snap.docs.forEach(function(d){
+        if(!BYID[d.id]) return;
+        if(d.id===S.me && d.metadata && d.metadata.hasPendingWrites) return;
+        var body=d.data()||{};
+        S.players[d.id]=body;
+        var at=+body.emoteAt||0;
+        if(at && at!==S.seenEmote[d.id]){
+          var fresh = Date.now()-at < 6000 && at > loadAt-3000;
+          S.seenEmote[d.id]=at;
+          if(fresh && !(d.id===S.me && Date.now()-S.lastEmoteSent<3000)) playEmote(d.id, body.emote);
+        }
+      });
+      render(); setLive(true,"Live");
+    },function(){ setLive(false,"Disconnected"); note("<b>Lost connection.</b> Refresh the page to rejoin the lobby."); });
+    S.firstChat=true;
+    db.collection("chat").orderBy("at","desc").limit(80).onSnapshot(function(snap){
+      S.chat = snap.docs.map(function(d){return d.data()||{};}).filter(function(m){return BYID[m.who];}).reverse();
+      renderChat();
+    },function(){ setLive(false,"Disconnected"); });
+  }
+
+  buildLineup(); buildSelect(); buildEmotes(); buildLoadout(); setupTabs(); wire();
+  render(); renderChat(); tick(); setInterval(tick,1000);
+  connect();
+})();
+</script>
+</body>
+</html>
